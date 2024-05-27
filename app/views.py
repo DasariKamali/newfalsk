@@ -6,10 +6,15 @@ forecasting_bp = Blueprint('forecasting_bp', __name__)
 
 def stream_blob(blob_client, chunk_size=1024*1024):
     """Generator function to stream the blob in chunks."""
-    download_stream = blob_client.download_blob()
-    stream = download_stream.chunks()
-    for chunk in stream:
+    blob_size = blob_client.get_blob_properties().size
+    start = 0
+
+    while start < blob_size:
+        end = min(start + chunk_size, blob_size)
+        download_stream = blob_client.download_blob(offset=start, length=chunk_size)
+        chunk = download_stream.readall()
         yield chunk
+        start = end
 
 @forecasting_bp.route("/api/download/", methods=["GET"])
 def download():
@@ -26,7 +31,7 @@ def download():
     blob_client = blob_client.get_blob_client(blob=blobpath)
 
     response = Response(
-        stream_blob(blob_client),
+        stream_blob(blob_client, chunk_size=1024*1024),
         content_type='application/octet-stream',
         headers={
             "Content-Disposition": f"attachment; filename={filename}"
